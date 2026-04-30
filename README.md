@@ -2,6 +2,18 @@
 
 A portable collection of GitHub Copilot customizations — instructions, prompts, and templates — that work across any project and platform (Unix/Windows).
 
+## Why This Repo Is Useful
+
+GitHub Copilot is only as good as the context you give it. Out of the box, it doesn't know your team's coding standards, naming conventions, or preferred patterns — so suggestions tend to be generic and inconsistent across projects.
+
+This repo gives you a ready-made, reusable set of Copilot customizations — instructions, prompts, rules, and agents — that you can install globally (once for every project) or per-project in seconds. The result:
+
+- **Consistent suggestions** that follow your standards instead of generic boilerplate
+- **Faster onboarding** for new repos and new teammates — no re-writing the same guidelines each time
+- **Better code reviews, tests, refactors, and docs** via specialized agents and prompt templates
+- **Cross-platform** — same setup works on macOS, Linux, and Windows
+- **No lock-in** — plain Markdown files you can fork, edit, or extend for your own team
+
 ## What's Included
 
 | Folder | Purpose | Description |
