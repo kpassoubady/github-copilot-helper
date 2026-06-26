@@ -59,7 +59,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AllModules = @("instructions", "prompts", "rules", "templates", "agents")
+$AllModules = @("instructions", "prompts", "rules", "templates", "agents", "skills", "hooks")
 
 # Global install location
 $GlobalDir = if ($env:GITHUB_COPILOT_HOME) { $env:GITHUB_COPILOT_HOME } else { Join-Path $HOME ".github-copilot" }
@@ -226,10 +226,46 @@ foreach ($mod in $SelectedModules) {
                 Install-File -Source $_.FullName -Destination $dest
             }
         }
-        "agents" {
-            Get-ChildItem -Path $modPath -Filter "*.md" -File | ForEach-Object {
-                $dest = Join-Path $DestPrefix "agents\$($_.Name)"
+        "agents", "skills", "hooks" {
+            Get-ChildItem -Path $modPath -Recurse -File | Where-Object { -not $_.Name.StartsWith(".") } | ForEach-Object {
+                $relPath = $_.FullName.Substring($modPath.Length + 1)
+                $dest = Join-Path $DestPrefix "$mod\$relPath"
                 Install-File -Source $_.FullName -Destination $dest
+            }
+
+            if ($mod -eq "hooks" -and -not $GlobalInstall -and -not $DryRun) {
+                $vscodeDir = Join-Path $TargetPath ".vscode"
+                if (-not (Test-Path $vscodeDir)) {
+                    New-Item -ItemType Directory -Path $vscodeDir -Force | Out-Null
+                }
+                $settingsFile = Join-Path $vscodeDir "settings.json"
+                Write-Status "config" "Wiring Copilot hooks into .vscode/settings.json" "Yellow"
+
+                $settings = @{}
+                if (Test-Path $settingsFile) {
+                    try {
+                        $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable
+                    } catch {
+                        $settings = @{}
+                    }
+                }
+
+                if (-not $settings.Contains("github.copilot.advanced")) {
+                    $settings["github.copilot.advanced"] = @{}
+                }
+                if (-not $settings["github.copilot.advanced"].Contains("hooks")) {
+                    $settings["github.copilot.advanced"]["hooks"] = @{}
+                }
+                
+                $settings["github.copilot.advanced"]["hooks"]["PreToolUse"] = @(
+                    @{ command = "bash .github/copilot/hooks/lint-before-commit.sh"; matcher = "Bash(git commit*)" },
+                    @{ command = "bash .github/copilot/hooks/test-before-push.sh"; matcher = "Bash(git push*)" }
+                )
+                $settings["github.copilot.advanced"]["hooks"]["PostToolUse"] = @(
+                    @{ command = "bash .github/copilot/hooks/format-on-save.sh"; matcher = "Edit|Write" }
+                )
+
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsFile
             }
         }
     }
