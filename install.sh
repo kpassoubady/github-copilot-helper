@@ -29,7 +29,7 @@ else
 fi
 
 # Available modules
-ALL_MODULES=(instructions prompts rules templates agents)
+ALL_MODULES=(instructions prompts rules templates agents skills hooks)
 
 usage() {
   echo -e "${BOLD}Usage:${NC} ./install.sh [options] [target-project-path]"
@@ -41,7 +41,7 @@ usage() {
   echo "  -m, --modules     Comma-separated list of modules (default: all)"
   echo "  -h, --help        Show this help message"
   echo ""
-  echo -e "${BOLD}Modules:${NC} instructions, prompts, rules, templates, agents"
+  echo -e "${BOLD}Modules:${NC} instructions, prompts, rules, templates, agents, skills, hooks"
   echo ""
   echo -e "${BOLD}Examples:${NC}"
   echo "  ./install.sh -g                        # Global install"
@@ -215,11 +215,27 @@ for mod in "${MODULES[@]}"; do
         install_file "$file" "$DEST_PREFIX/templates/$basename"
       done < <(find "$SCRIPT_DIR/templates" -maxdepth 1 -name "*.md" -type f -print0)
       ;;
-    agents)
+    agents|skills|hooks)
       while IFS= read -r -d '' file; do
-        basename="$(basename "$file")"
-        install_file "$file" "$DEST_PREFIX/agents/$basename"
-      done < <(find "$SCRIPT_DIR/agents" -maxdepth 1 -name "*.md" -type f -print0)
+        rel_path="${file#$SCRIPT_DIR/}"
+        install_file "$file" "$DEST_PREFIX/${rel_path#*/}"
+      done < <(find "$SCRIPT_DIR/$mod" -type f ! -path "*/.*" -print0)
+
+      if [[ "$mod" == "hooks" && "$GLOBAL_INSTALL" == false && "$DRY_RUN" == false ]]; then
+        mkdir -p "$TARGET_PATH/.vscode"
+        settings_file="$TARGET_PATH/.vscode/settings.json"
+        echo -e "  ${YELLOW}[config]${NC} Wiring Copilot hooks into .vscode/settings.json"
+        
+        if [[ ! -f "$settings_file" ]]; then
+          echo "{}" > "$settings_file"
+        fi
+        
+        if command -v jq &>/dev/null; then
+          jq '."github.copilot.advanced" += {"hooks": {"PreToolUse": [{"command": "bash .github/copilot/hooks/lint-before-commit.sh", "matcher": "Bash(git commit*)"}, {"command": "bash .github/copilot/hooks/test-before-push.sh", "matcher": "Bash(git push*)"}], "PostToolUse": [{"command": "bash .github/copilot/hooks/format-on-save.sh", "matcher": "Edit|Write"}]}}' "$settings_file" > "${settings_file}.tmp" && mv "${settings_file}.tmp" "$settings_file"
+        else
+          echo -e "  ${RED}[warning]${NC} 'jq' not found. Cannot auto-configure .vscode/settings.json. Please configure hooks manually."
+        fi
+      fi
       ;;
   esac
 
